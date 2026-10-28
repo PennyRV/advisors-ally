@@ -1,10 +1,10 @@
+[theme]
 base = "light"
 primaryColor = "#245C50"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F2F1"
-textColor = "#191C1B"
-borderColor = [theme]
-"#BFC6C3"
+secondaryBackgroundColor = "#E8ECEA"
+textColor = "#292D2B"
+borderColor = "#AAB5AF"
 
 font = "Aptos, sans-serif"
 baseFontSize = 16
@@ -15,6 +15,8 @@ baseRadius = "0.5rem"
 buttonRadius = "0.75rem"
 
 [theme.sidebar]
-backgroundColor = "#F0F2F1"
-textColor = "#191C1B"
+backgroundColor = "#DCE3DF"
+secondaryBackgroundColor = "#EDF1EF"
+textColor = "#292D2B"
 primaryColor = "#245C50"
+borderColor = "#AAB5AF"
