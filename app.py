@@ -7,6 +7,9 @@ import json
 from google import genai
 from google.genai import errors
 from ia_documentos import buscar_fragmentos, responder_documentos, MODELO_GEMINI
+from almacen_documentos import (
+    mostrar_acceso, mostrar_documentos, documentos_para_consulta, ErrorDocumentos,
+)
 
 RUTA_LOGO = Path(__file__).resolve().parent / "logo.svg"
 
@@ -73,6 +76,7 @@ div.stButton > button:focus-visible {
 
 # Menú lateral.
 st.sidebar.title("Advisor’s Ally")
+cliente_documentos = mostrar_acceso()
 
 with st.sidebar.expander("Personalizar mi perfil"):
     nombre_agente = st.text_input(
@@ -97,6 +101,7 @@ seccion = st.sidebar.radio(
     [
         "Inicio",
         "Clasificar consultas",
+        "Mis documentos",
         "Consultar documentos",
         "Mis pendientes",
     ],
@@ -137,6 +142,9 @@ elif seccion == "Clasificar consultas":
 
     st.info("La clasificación con IA se incorporará en el siguiente paso.")
 
+elif seccion == "Mis documentos":
+    mostrar_documentos(cliente_documentos)
+
 elif seccion == "Consultar documentos":
     st.header("Consultar documentos")
     st.write(
@@ -149,6 +157,18 @@ elif seccion == "Consultar documentos":
         "Selecciona uno o varios PDF", type=["pdf"],
         accept_multiple_files=True, key="documentos_caso",
     )
+
+    # Combina la carga temporal con los PDF recuperados de la cuenta activa.
+    documentos = list(documentos or [])
+    try:
+        guardados = documentos_para_consulta(cliente_documentos)
+    except ErrorDocumentos:
+        guardados = []
+        st.warning("No pudimos verificar tu acceso a los PDF guardados. Vuelve a entrar en Mi cuenta.")
+    if guardados:
+        st.info(f"PDF preparados desde Mis documentos: {len(guardados)}")
+        documentos.extend(guardados)
+    st.caption("Para conservar archivos entre visitas, usa Mis documentos → Guardar archivos.")
 
     # Caché privada de esta sesión: nunca compartimos PDF entre usuarios.
     identificadores = []
@@ -174,8 +194,7 @@ elif seccion == "Consultar documentos":
                     resumen["paginas"] = len(lector.pages)
                     for numero, pagina in enumerate(lector.pages, 1):
                         # Conserva mejor las columnas de las carátulas.
-                        texto = (pagina.extract_text(
-                            extraction_mode="layout") or "").strip()
+                        texto = (pagina.extract_text(extraction_mode="layout") or "").strip()
                         if not texto:
                             texto = (pagina.extract_text() or "").strip()
                         if texto:
@@ -185,8 +204,7 @@ elif seccion == "Consultar documentos":
                             resumen["sin_texto"].append(numero)
             except Exception:
                 # No conservamos la extracción parcial de un archivo fallido.
-                paginas = [p for p in paginas if p["documento"]
-                           != documento.name]
+                paginas = [p for p in paginas if p["documento"] != documento.name]
                 resumen["error"] = "No pudimos leer este archivo. Prueba con otra copia."
             resumenes.append(resumen)
         st.session_state.update({"firma_pdf": firma_archivos,
@@ -229,8 +247,7 @@ elif seccion == "Consultar documentos":
         key=f"alcance_{firma_archivos}",
         help="Para definiciones, prueba primero solo las condiciones generales.",
     )
-    paginas_consulta = [
-        p for p in paginas_documentos if p["documento"] in alcance]
+    paginas_consulta = [p for p in paginas_documentos if p["documento"] in alcance]
 
     st.subheader("Consultar información con IA")
     consulta = st.text_input(
