@@ -146,8 +146,6 @@ if seccion == "Inicio":
 
     st.info("Selecciona una opción en el menú de la izquierda.")
 
-    if st.button("Probar estilo metálico"):
-        st.success("¡El botón funciona!")
 
 elif seccion == "Clasificar consultas":
     st.header("Clasificar consultas")
@@ -285,3 +283,4 @@ with st.sidebar.expander("Primera respuesta de Gemini"):
                 "No pudimos completar la prueba. Revisa "
                 "la conexión y la configuración de secretos."
             )
+
