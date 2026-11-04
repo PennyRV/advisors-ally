@@ -168,6 +168,102 @@ def detalle_acceso(error, etapa):
     return f"Acceso v2 · etapa: {etapa} · tipo: {tipo} · código: {codigo} · estado: {estado}"
 
 
+def validar_registro(correo, password, repetir):
+    correo = str(correo or '').strip()
+    if len(correo) > 254 or not re.fullmatch(r'[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+', correo):
+        raise ErrorDocumentos('Escribe un correo electrónico válido.')
+    if not isinstance(password, str) or not 8 <= len(password) <= 64:
+        raise ErrorDocumentos('Usa una contraseña de 8 a 64 caracteres.')
+    if len(password.encode('utf-8')) > 72:
+        raise ErrorDocumentos('La contraseña es demasiado larga. Reduce la cantidad de caracteres o emojis.')
+    if not password.strip():
+        raise ErrorDocumentos('La contraseña no puede contener solo espacios.')
+    if password != repetir:
+        raise ErrorDocumentos('Las contraseñas no coinciden. Escríbelas nuevamente.')
+    return correo
+
+
+def url_confirmacion():
+    import streamlit as st
+    from urllib.parse import urlparse
+    try:
+        url = str(st.secrets.get('acceso', {}).get('url_confirmacion',
+            'https://advisors-ally-3nttdzmg6i5qh92vbpaorz.streamlit.app/')).strip()
+    except FileNotFoundError:
+        url = 'https://advisors-ally-3nttdzmg6i5qh92vbpaorz.streamlit.app/'
+    partes = urlparse(url)
+    if partes.scheme != 'https' or not partes.netloc or partes.username or partes.query or partes.fragment:
+        raise ErrorDocumentos('La dirección de confirmación no está configurada correctamente. Contacta al administrador.')
+    return url
+
+
+def registrar_cuenta(cliente, correo, password, repetir, redirect_url):
+    """No inicia sesión ni guarda una contraseña o un cliente global."""
+    correo = validar_registro(correo, password, repetir)
+    try:
+        respuesta = cliente.auth.sign_up({
+            'email': correo, 'password': password,
+            'options': {'email_redirect_to': redirect_url},
+        })
+    except Exception as exc:
+        codigo = str(getattr(exc, 'code', ''))
+        mensajes = {
+            'signup_disabled': 'El registro está desactivado. Contacta al administrador para habilitar nuevas cuentas.',
+            'email_provider_disabled': 'El registro por correo no está habilitado. Contacta al administrador.',
+            'email_address_not_authorized': 'No se pudo enviar la confirmación a este correo. El administrador debe configurar el envío de correos de la app.',
+            'over_email_send_rate_limit': 'Se alcanzó el límite de correos de confirmación. Espera antes de volver a intentarlo.',
+            'over_request_rate_limit': 'Hay demasiados intentos. Espera unos minutos antes de volver a intentarlo.',
+            'weak_password': 'La contraseña no cumple los requisitos de seguridad. Elige una más larga y difícil de adivinar.',
+            'email_address_invalid': 'Revisa el correo electrónico e inténtalo nuevamente.',
+            'user_already_exists': 'Si ya tienes una cuenta con ese correo, utiliza Iniciar sesión.',
+            'user_already_registered': 'Si ya tienes una cuenta con ese correo, utiliza Iniciar sesión.',
+        }
+        raise ErrorDocumentos(mensajes.get(codigo,
+            'No se pudo completar el registro. Revisa la conexión o contacta al administrador.')) from exc
+    if not getattr(respuesta, 'user', None):
+        raise ErrorDocumentos('No se pudo confirmar el registro. Inténtalo más tarde o contacta al administrador.')
+    # El proyecto determina si exige confirmación. Nunca se evita esa validación.
+    activa = bool(getattr(respuesta, 'session', None))
+    if activa:
+        # No conserva la sesión temporal creada si el proyecto no exige confirmación.
+        try:
+            cliente.auth.sign_out({'scope': 'local'})
+        except Exception:
+            pass
+    return activa
+
+
+def mostrar_registro():
+    import streamlit as st
+    st.write('Crea tu cuenta de agente')
+    st.caption('Tus clientes, pólizas y documentos se guardarán en tu cuenta.')
+    with st.form('_aa_form_registro', clear_on_submit=True):
+        correo = st.text_input('Correo para registrarte', key='_aa_reg_email', max_chars=254)
+        password = st.text_input('Nueva contraseña', type='password', key='_aa_reg_password', max_chars=64)
+        repetir = st.text_input('Repite la contraseña', type='password', key='_aa_reg_repetir', max_chars=64)
+        st.caption('Usa al menos 8 caracteres y una contraseña difícil de adivinar.')
+        registrar = st.form_submit_button('Crear cuenta', type='primary')
+    if registrar:
+        try:
+            validar_registro(correo, password, repetir)
+            redirect_url = url_confirmacion()
+            cliente = crear_cliente(st.secrets['SUPABASE_URL'], st.secrets['SUPABASE_PUBLISHABLE_KEY'])
+            with st.spinner('Creando tu cuenta...'):
+                activa = registrar_cuenta(cliente, correo, password, repetir, redirect_url)
+            if activa:
+                st.success('Cuenta lista. Selecciona Iniciar sesión para entrar con tu correo y contraseña.')
+            else:
+                st.success('Solicitud recibida. Revisa tu correo, incluida la carpeta de spam, para confirmar tu cuenta. Después vuelve a Iniciar sesión. Si ya tenías cuenta, utiliza tus datos de acceso.')
+        except (FileNotFoundError, KeyError):
+            st.error('El registro todavía no está configurado. Contacta al administrador.')
+        except ErrorDocumentos as exc:
+            st.warning(str(exc))
+        except ImportError:
+            st.error('El registro no está disponible. Contacta al administrador.')
+        except Exception:
+            st.error('No se pudo completar el registro. Inténtalo más tarde o contacta al administrador.')
+
+
 def mostrar_acceso():
     """Devuelve el cliente de esta sesión, o None para la demostración pública."""
     import streamlit as st
@@ -198,7 +294,10 @@ def mostrar_acceso():
             return cliente
 
         st.caption("Entra para guardar y recuperar tus documentos privados.")
-        st.caption("Acceso v2")
+        modo = st.radio('Acceso', ['Iniciar sesión', 'Crear cuenta'], key='_aa_modo_acceso')
+        if modo == 'Crear cuenta':
+            mostrar_registro()
+            return None
         with st.form("_aa_form_acceso", clear_on_submit=True):
             correo = st.text_input("Correo", key="_aa_email")
             password = st.text_input("Contraseña", type="password", key="_aa_password")
@@ -237,7 +336,7 @@ def mostrar_acceso():
                 except Exception as exc:
                     codigo = getattr(exc, "code", None)
                     if codigo == "invalid_credentials":
-                        st.error("Supabase no aceptó ese correo y contraseña. Comprueba que sean los mismos que funcionaron en la terminal.")
+                        st.error("No se aceptó ese correo y contraseña. Revisa tus datos o utiliza Crear cuenta si todavía no te has registrado.")
                     elif codigo == "email_not_confirmed":
                         st.error("La cuenta necesita confirmar su correo en Supabase.")
                     else:
@@ -364,3 +463,4 @@ def mostrar_documentos(cliente):
             st.rerun()
         except ErrorDocumentos as exc:
             st.error(str(exc))
+
