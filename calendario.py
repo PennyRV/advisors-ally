@@ -6,6 +6,7 @@ import streamlit as st
 from almacen_documentos import usuario_validado, ErrorDocumentos
 from clientes import AgendaClientes, ErrorClientes
 from calendario_google import CalendarioGoogle, ErrorCalendario, crear_borrador, enlace_meet, ZONA
+from calendario_web import ConexionGoogleWeb, CalendarioGoogleWeb, configuracion
 
 
 def mostrar_calendario(cliente):
@@ -28,19 +29,28 @@ def mostrar_calendario(cliente):
         habilitado = st.secrets.get('calendario', {}).get('modo_local', False) is True
     except FileNotFoundError:
         habilitado = False
-    if not habilitado:
-        st.info('Google Calendar y Meet funcionan en la versión local del proyecto. La conexión de cada agente desde esta versión publicada requiere autorización web, pendiente de incorporar.')
-        st.write('La versión local permite consultar la agenda, preparar citas, revisar el correo del invitado, crear un enlace de Meet y solicitar el envío de invitaciones.')
-        st.caption('No subas el archivo de credenciales ni los tokens del calendario a GitHub. Esta pantalla no conecta automáticamente el calendario local con el servidor.')
-        return
-    with st.expander('Conectar o cambiar cuenta de Google'):
-        st.write('Ejecuta este comando en otra terminal de Visual Studio Code, dentro de tu proyecto:')
-        st.code(f'.\\.venv\\Scripts\\python.exe conectar_calendario.py --agente-id {uid}', language='powershell')
-        st.caption('La autorización se hace en Google. No introduzcas tu contraseña de Google en la app. Los accesos se guardan por ID de agente en el perfil local de Windows.')
-        st.button('Actualizar conexión', key='cal_actualizar')
-        st.link_button('Administrar permisos en Google', 'https://myaccount.google.com/connections')
+    if habilitado:
+        with st.expander('Conectar o cambiar cuenta de Google'):
+            st.write('Ejecuta este comando en otra terminal de Visual Studio Code, dentro de tu proyecto:')
+            st.code(f'.\\.venv\\Scripts\\python.exe conectar_calendario.py --agente-id {uid}', language='powershell')
+            st.caption('La autorización se hace en Google. No introduzcas tu contraseña de Google en la app. Los accesos se guardan por ID de agente en el perfil local de Windows.')
+            st.button('Actualizar conexión', key='cal_actualizar')
+            st.link_button('Administrar permisos en Google', 'https://myaccount.google.com/connections')
+    else:
+        st.caption('Conecta tu propia cuenta. Google pedirá permiso para gestionar sus eventos; las invitaciones solo se solicitan al confirmar una cita.')
+        try:
+            configuracion()
+            if st.button('Preparar conexión con Google', key='cal_web_preparar', type='primary'):
+                st.session_state['cal_web_url'] = ConexionGoogleWeb(cliente).iniciar()
+            if st.session_state.get('cal_web_url'):
+                st.link_button('Conectar con Google', st.session_state['cal_web_url'])
+                st.caption('La autorización abre otra pestaña. Si Google te pide volver a iniciar sesión en Advisor’s Ally, usa la misma cuenta de agente y después vuelve a Calendario. El enlace dura 10 minutos.')
+            st.button('Actualizar conexión', key='cal_web_actualizar')
+        except (ErrorCalendario, ErrorDocumentos) as exc:
+            st.warning(str(exc))
+            return
     try:
-        google = CalendarioGoogle(uid)
+        google = CalendarioGoogle(uid) if habilitado else CalendarioGoogleWeb(cliente)
         cuenta = google.calendario()
     except ErrorCalendario as exc:
         st.warning(str(exc))
@@ -67,7 +77,7 @@ def mostrar_calendario(cliente):
                 eventos = google.listar(datetime.combine(desde, time.min, tz), datetime.combine(hasta + timedelta(days=1), time.min, tz))
                 if not eventos:
                     st.info('No hay citas en ese intervalo.')
-                for e in eventos:
+                for numero_evento, e in enumerate(eventos, 1):
                     st.write(e.get('summary') or 'Sin título')
                     inicio = e.get('start', {})
                     if inicio.get('dateTime'):
@@ -76,7 +86,7 @@ def mostrar_calendario(cliente):
                         valor = inicio.get('date', '') + ' · todo el día'
                     st.caption(valor + ' · Ciudad de México')
                     if enlace_meet(e):
-                        st.link_button('Abrir Meet', enlace_meet(e), key='cal_agenda_' + e['id'])
+                        st.link_button(f'Abrir Meet · {numero_evento}', enlace_meet(e))
             except ErrorCalendario as exc:
                 st.warning(str(exc))
     with crear:

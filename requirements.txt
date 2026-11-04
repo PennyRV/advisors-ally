@@ -6,3 +6,4 @@ starlette==1.9.0
 pyarrow<25
 requests>=2.32,<3
 tzdata>=2025.1
+cryptography>=41,<51

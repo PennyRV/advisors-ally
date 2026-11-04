@@ -15,6 +15,7 @@ from clientes import mostrar_clientes
 from consulta_automatica import mostrar_consulta_automatica
 from whatsapp import mostrar_whatsapp
 from calendario import mostrar_calendario
+from calendario_web import procesar_retorno_google
 
 RUTA_LOGO = Path(__file__).resolve().parent / "logo.svg"
 
@@ -85,6 +86,10 @@ div[data-testid="stFormSubmitButton"] button:focus-visible {
 # Menú lateral.
 st.sidebar.title("Advisor’s Ally")
 cliente_documentos = mostrar_acceso()
+procesar_retorno_google(cliente_documentos)
+aviso_google = st.session_state.pop('cal_web_aviso', None)
+if aviso_google:
+    getattr(st, aviso_google[0])(aviso_google[1])
 
 with st.sidebar.expander("Personalizar mi perfil"):
     nombre_agente = st.text_input(
