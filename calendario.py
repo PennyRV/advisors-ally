@@ -2,11 +2,30 @@
 from datetime import datetime, timedelta, time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
+from html import escape
+from urllib.parse import urlparse
 import streamlit as st
 from almacen_documentos import usuario_validado, ErrorDocumentos
 from clientes import AgendaClientes, ErrorClientes
 from calendario_google import CalendarioGoogle, ErrorCalendario, crear_borrador, enlace_meet, ZONA
 from calendario_web import ConexionGoogleWeb, CalendarioGoogleWeb, configuracion
+
+
+def enlace_google(etiqueta, url):
+    """Enlace normal: evita el módulo lazy LinkButton que falla en Cloud."""
+    destino = urlparse(str(url))
+    if (destino.scheme != 'https' or destino.netloc not in {
+            'accounts.google.com', 'myaccount.google.com', 'meet.google.com',
+            'calendar.google.com', 'www.google.com'} or destino.username):
+        st.warning('No se pudo mostrar el enlace de Google. Prepara nuevamente la conexión.')
+        return
+    st.markdown(
+        '<a href="' + escape(str(url), quote=True) + '" target="_blank" '
+        'rel="noopener noreferrer" style="display:inline-block;background:#245C50;'
+        'color:white;padding:0.65rem 1rem;border-radius:0.75rem;text-decoration:none;'
+        'font-weight:600;margin:0.25rem 0">' + escape(etiqueta) + '</a>',
+        unsafe_allow_html=True,
+    )
 
 
 def mostrar_calendario(cliente):
@@ -35,7 +54,7 @@ def mostrar_calendario(cliente):
             st.code(f'.\\.venv\\Scripts\\python.exe conectar_calendario.py --agente-id {uid}', language='powershell')
             st.caption('La autorización se hace en Google. No introduzcas tu contraseña de Google en la app. Los accesos se guardan por ID de agente en el perfil local de Windows.')
             st.button('Actualizar conexión', key='cal_actualizar')
-            st.link_button('Administrar permisos en Google', 'https://myaccount.google.com/connections')
+            enlace_google('Administrar permisos en Google', 'https://myaccount.google.com/connections')
     else:
         st.caption('Conecta tu propia cuenta. Google pedirá permiso para gestionar sus eventos; las invitaciones solo se solicitan al confirmar una cita.')
         try:
@@ -43,7 +62,7 @@ def mostrar_calendario(cliente):
             if st.button('Preparar conexión con Google', key='cal_web_preparar', type='primary'):
                 st.session_state['cal_web_url'] = ConexionGoogleWeb(cliente).iniciar()
             if st.session_state.get('cal_web_url'):
-                st.link_button('Conectar con Google', st.session_state['cal_web_url'])
+                enlace_google('Conectar con Google', st.session_state['cal_web_url'])
                 st.caption('La autorización abre otra pestaña. Si Google te pide volver a iniciar sesión en Advisor’s Ally, usa la misma cuenta de agente y después vuelve a Calendario. El enlace dura 10 minutos.')
             st.button('Actualizar conexión', key='cal_web_actualizar')
         except (ErrorCalendario, ErrorDocumentos) as exc:
@@ -86,7 +105,7 @@ def mostrar_calendario(cliente):
                         valor = inicio.get('date', '') + ' · todo el día'
                     st.caption(valor + ' · Ciudad de México')
                     if enlace_meet(e):
-                        st.link_button(f'Abrir Meet · {numero_evento}', enlace_meet(e))
+                        enlace_google(f'Abrir Meet · {numero_evento}', enlace_meet(e))
             except ErrorCalendario as exc:
                 st.warning(str(exc))
     with crear:
@@ -155,7 +174,7 @@ def mostrar_calendario(cliente):
             st.write(creado.get('summary', ''))
             enlace = enlace_meet(creado)
             if enlace:
-                st.link_button('Abrir Google Meet', enlace)
+                enlace_google('Abrir Google Meet', enlace)
             elif creado.get('conferenceData'):
                 estado = creado['conferenceData'].get('createRequest', {}).get('status', {}).get('statusCode')
                 st.warning('Google aún no entregó el enlace de Meet.' if estado != 'failure' else 'La cita se creó, pero Google no pudo generar el Meet. Abre el evento en Google Calendar para revisarlo.')
@@ -167,5 +186,5 @@ def mostrar_calendario(cliente):
                         st.warning(str(exc))
             link = creado.get('htmlLink', '')
             if link.startswith('https://www.google.com/calendar/') or link.startswith('https://calendar.google.com/'):
-                st.link_button('Abrir cita en Google Calendar', link)
+                enlace_google('Abrir cita en Google Calendar', link)
     st.caption('Los avisos de esta cita los gestiona Google Calendar para el agente, según sus ajustes y permisos de notificación. No se envían recordatorios por WhatsApp. Los invitados gestionan sus propios avisos.')
