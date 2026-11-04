@@ -11,6 +11,11 @@ from almacen_documentos import (
     mostrar_acceso, mostrar_documentos, documentos_para_consulta, ErrorDocumentos,
 )
 
+from clientes import mostrar_clientes
+from consulta_automatica import mostrar_consulta_automatica
+from whatsapp import mostrar_whatsapp
+from calendario import mostrar_calendario
+
 RUTA_LOGO = Path(__file__).resolve().parent / "logo.svg"
 
 st.set_page_config(
@@ -44,7 +49,8 @@ section[data-testid="stSidebar"] {
     border-right: 1px solid #9AA9A2;
 }
 
-div.stButton > button {
+div.stButton > button,
+div[data-testid="stFormSubmitButton"] button {
     background: linear-gradient(
         115deg,
         #173D34 0%,
@@ -61,13 +67,15 @@ div.stButton > button {
     padding: 0.65rem 1.2rem;
 }
 
-div.stButton > button:hover {
+div.stButton > button:hover,
+div[data-testid="stFormSubmitButton"] button:hover {
     color: #FFFFFF;
     border-color: #B5C8BE;
     filter: brightness(1.08);
 }
 
-div.stButton > button:focus-visible {
+div.stButton > button:focus-visible,
+div[data-testid="stFormSubmitButton"] button:focus-visible {
     outline: 3px solid #245C50;
     outline-offset: 3px;
 }
@@ -101,8 +109,11 @@ seccion = st.sidebar.radio(
     [
         "Inicio",
         "Clasificar consultas",
+        "Clientes",
         "Mis documentos",
         "Consultar documentos",
+        "WhatsApp",
+        "Calendario",
         "Mis pendientes",
     ],
 )
@@ -142,196 +153,20 @@ elif seccion == "Clasificar consultas":
 
     st.info("La clasificación con IA se incorporará en el siguiente paso.")
 
+elif seccion == "Clientes":
+    mostrar_clientes(cliente_documentos)
+
 elif seccion == "Mis documentos":
     mostrar_documentos(cliente_documentos)
 
 elif seccion == "Consultar documentos":
-    st.header("Consultar documentos")
-    st.write(
-        "Carga documentos de un solo caso y selecciona cuáles consultar. "
-        "Para las pruebas con Gemini gratuito, utiliza documentos públicos "
-        "o copias sin información personal ni confidencial."
-    )
+    mostrar_consulta_automatica(cliente_documentos, modelo_gemini)
 
-    documentos = st.file_uploader(
-        "Selecciona uno o varios PDF", type=["pdf"],
-        accept_multiple_files=True, key="documentos_caso",
-    )
+elif seccion == "WhatsApp":
+    mostrar_whatsapp(cliente_documentos, modelo_gemini)
 
-    # Combina la carga temporal con los PDF recuperados de la cuenta activa.
-    documentos = list(documentos or [])
-    try:
-        guardados = documentos_para_consulta(cliente_documentos)
-    except ErrorDocumentos:
-        guardados = []
-        st.warning("No pudimos verificar tu acceso a los PDF guardados. Vuelve a entrar en Mi cuenta.")
-    if guardados:
-        st.info(f"PDF preparados desde Mis documentos: {len(guardados)}")
-        documentos.extend(guardados)
-    st.caption("Para conservar archivos entre visitas, usa Mis documentos → Guardar archivos.")
-
-    # Caché privada de esta sesión: nunca compartimos PDF entre usuarios.
-    identificadores = []
-    for documento in documentos or []:
-        identificadores.append((
-            documento.name, hashlib.sha256(documento.getvalue()).hexdigest()
-        ))
-    firma_archivos = hashlib.sha256(
-        json.dumps(identificadores, ensure_ascii=False).encode()
-    ).hexdigest()
-
-    if st.session_state.get("firma_pdf") != firma_archivos:
-        paginas = []
-        resumenes = []
-        for documento in documentos or []:
-            resumen = {"nombre": documento.name, "paginas": 0,
-                       "sin_texto": [], "error": None}
-            try:
-                lector = PdfReader(BytesIO(documento.getvalue()))
-                if lector.is_encrypted:
-                    resumen["error"] = "PDF protegido: carga una copia sin contraseña."
-                else:
-                    resumen["paginas"] = len(lector.pages)
-                    for numero, pagina in enumerate(lector.pages, 1):
-                        # Conserva mejor las columnas de las carátulas.
-                        texto = (pagina.extract_text(extraction_mode="layout") or "").strip()
-                        if not texto:
-                            texto = (pagina.extract_text() or "").strip()
-                        if texto:
-                            paginas.append({"documento": documento.name,
-                                            "pagina": numero, "texto": texto})
-                        else:
-                            resumen["sin_texto"].append(numero)
-            except Exception:
-                # No conservamos la extracción parcial de un archivo fallido.
-                paginas = [p for p in paginas if p["documento"] != documento.name]
-                resumen["error"] = "No pudimos leer este archivo. Prueba con otra copia."
-            resumenes.append(resumen)
-        st.session_state.update({"firma_pdf": firma_archivos,
-                                 "paginas_documentos": paginas,
-                                 "resumenes_pdf": resumenes})
-        st.session_state.pop("consulta_guardada", None)
-
-    paginas_documentos = st.session_state.get("paginas_documentos", [])
-    for resumen in st.session_state.get("resumenes_pdf", []):
-        with st.expander(resumen["nombre"]):
-            if resumen["error"]:
-                st.warning(resumen["error"])
-                continue
-            del_archivo = [p for p in paginas_documentos
-                           if p["documento"] == resumen["nombre"]]
-            st.write(f"Páginas del PDF: {resumen['paginas']}")
-            st.write(f"Páginas con texto: {len(del_archivo)}")
-            if resumen["sin_texto"]:
-                st.warning(
-                    "Sin texto en páginas "
-                    + ", ".join(map(str, resumen["sin_texto"]))
-                    + ". Pueden estar vacías o necesitar OCR."
-                )
-            if del_archivo:
-                seleccion = st.selectbox(
-                    "Página para revisar", range(len(del_archivo)),
-                    format_func=lambda i, ps=del_archivo: f"Página {ps[i]['pagina']}",
-                    key=f"vista_{firma_archivos}_{resumen['nombre']}",
-                )
-                st.text_area(
-                    "Texto extraído", value=del_archivo[seleccion]["texto"],
-                    height=300, disabled=True,
-                    key=f"texto_{firma_archivos}_{resumen['nombre']}_{seleccion}",
-                )
-    st.caption("Cargar y buscar en los PDF no los envía a Gemini.")
-
-    nombres = list(dict.fromkeys(p["documento"] for p in paginas_documentos))
-    alcance = st.multiselect(
-        "Documentos que quieres consultar", options=nombres, default=nombres,
-        key=f"alcance_{firma_archivos}",
-        help="Para definiciones, prueba primero solo las condiciones generales.",
-    )
-    paginas_consulta = [p for p in paginas_documentos if p["documento"] in alcance]
-
-    st.subheader("Consultar información con IA")
-    consulta = st.text_input(
-        "¿Qué información necesitas?",
-        placeholder="Ejemplo: ¿Qué significa deducible anual?",
-        key="consulta_documental",
-    )
-    firma_consulta = hashlib.sha256(json.dumps(
-        [firma_archivos, sorted(alcance), consulta.strip(), modelo_gemini],
-        ensure_ascii=False,
-    ).encode()).hexdigest()
-    if st.session_state.get("firma_consulta") != firma_consulta:
-        st.session_state["firma_consulta"] = firma_consulta
-        st.session_state.pop("consulta_guardada", None)
-
-    if st.button("Buscar fuentes", key="buscar_documentos"):
-        if not paginas_consulta:
-            st.warning("Carga y selecciona al menos un documento con texto.")
-        elif not consulta.strip():
-            st.warning("Escribe tu pregunta.")
-        else:
-            fuentes = buscar_fragmentos(consulta, paginas_consulta, k=8)
-            st.session_state["consulta_guardada"] = {
-                "fuentes": fuentes, "respuesta": None, "error": None,
-            }
-
-    guardada = st.session_state.get("consulta_guardada")
-    if guardada is not None:
-        fuentes = guardada["fuentes"]
-        if not fuentes:
-            st.info(
-                "No encontramos fuentes pertinentes. Prueba otros términos "
-                "o selecciona otros documentos. No se envió nada a Gemini."
-            )
-        else:
-            st.subheader("Fuentes encontradas")
-            st.caption(
-                "Revisa las páginas antes de generar la respuesta. "
-                "La búsqueda local prioriza frases y variantes de palabras."
-            )
-            for numero, fuente in enumerate(fuentes, 1):
-                with st.expander(
-                    f"Fuente {numero} · {fuente['documento']} · "
-                    f"Página PDF {fuente['pagina']}"
-                ):
-                    st.text(fuente["texto"])
-
-            autorizar_envio = st.checkbox(
-                "Confirmo que la consulta, los nombres de archivo y las fuentes "
-                "seleccionadas no contienen información personal, sensible ni "
-                "confidencial, y autorizo su envío a Gemini.",
-                key=f"autorizar_{firma_consulta}",
-            )
-            if st.button("Generar borrador", key="generar_borrador",
-                         disabled=not autorizar_envio):
-                try:
-                    clave = st.secrets["GEMINI_API_KEY"].strip()
-                    if not clave or not modelo_gemini:
-                        guardada["error"] = "Revisa la clave y el nombre del modelo."
-                        guardada["respuesta"] = None
-                    else:
-                        with st.spinner("Preparando respuesta con las fuentes..."):
-                            respuesta, error = responder_documentos(
-                                consulta, fuentes, clave, modelo=modelo_gemini
-                            )
-                        guardada.update(respuesta=respuesta, error=error)
-                except (FileNotFoundError, KeyError):
-                    guardada.update(respuesta=None, error=(
-                        "No encontramos GEMINI_API_KEY. Revisa secrets.toml."
-                    ))
-                except Exception:
-                    guardada.update(respuesta=None, error=(
-                        "No se pudo completar la solicitud. Revisa la configuración."
-                    ))
-            if guardada["error"]:
-                st.warning(guardada["error"])
-            if guardada["respuesta"]:
-                st.subheader("Borrador de respuesta")
-                st.markdown(guardada["respuesta"])
-                st.caption(
-                    "Las referencias identifican las fuentes enviadas; comprueba "
-                    "que respaldan la respuesta. La aplicación no valida la "
-                    "procedencia de un siniestro ni la compatibilidad contractual."
-                )
+elif seccion == "Calendario":
+    mostrar_calendario(cliente_documentos)
 
 elif seccion == "Mis pendientes":
     st.header("Mis pendientes")

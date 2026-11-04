@@ -323,28 +323,8 @@ def mostrar_documentos(cliente):
             mb = 0
         st.write(f"{a['nombre']} · {mb:.2f} MB")
 
-    st.subheader("Usar PDF en consultas")
-    pdfs = [a["ruta"] for a in archivos if a["nombre"].lower().endswith(".pdf")]
-    elegidos = st.multiselect(
-        "Selecciona los PDF de un mismo caso", options=pdfs,
-        format_func=lambda r: f"{por_ruta[r]['nombre']} · {r.split('/')[-1][:6]}",
-        key="_aa_pdf_elegidos",
-    )
-    if st.button("Preparar PDF para consultar", disabled=not elegidos, key="_aa_preparar"):
-        try:
-            preparados = []
-            with st.spinner("Recuperando tus PDF..."):
-                for ruta in elegidos:
-                    a = por_ruta[ruta]
-                    # Nombre único por objeto, sin incluir el identificador del usuario.
-                    nombre = f"{PurePosixPath(a['nombre']).stem}__{ruta.split('/')[-1][:8]}.pdf"
-                    preparados.append(DocumentoConsulta(nombre, almacen.descargar(ruta)))
-            st.session_state["_aa_pdf_consulta"] = preparados
-            st.session_state["_aa_propietario_consulta"] = uid
-            st.success("PDF preparados. Abre Consultar documentos en el menú.")
-        except ErrorDocumentos as exc:
-            st.error(str(exc))
-    st.caption("Word e imágenes se pueden guardar y descargar. La consulta con IA sigue disponible para PDF con texto.")
+    st.info("Los PDF guardados se consultan automáticamente desde Consultar documentos. No necesitas volver a subirlos ni seleccionarlos.")
+    st.caption("Word e imágenes se guardan y descargan; la búsqueda con IA sigue disponible para PDF con texto.")
 
     st.subheader("Descargar o eliminar")
     elegido = st.selectbox(
@@ -378,7 +358,7 @@ def mostrar_documentos(cliente):
             for k in ["_aa_pdf_consulta", "_aa_propietario_consulta", "_aa_descarga",
                       "paginas_documentos", "resumenes_pdf", "firma_pdf",
                       "consulta_guardada", "firma_consulta", "_aa_pdf_elegidos",
-                      "_aa_archivo_accion"]:
+                      "_aa_archivo_accion", "auto_cache", "auto_resultado"]:
                 st.session_state.pop(k, None)
             st.session_state["_aa_aviso"] = "Archivo eliminado. Vuelve a seleccionar los PDF que quieras consultar."
             st.rerun()

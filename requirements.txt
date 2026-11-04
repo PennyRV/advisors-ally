@@ -3,3 +3,6 @@ pypdf==6.21.2
 google-genai==2.33.0
 supabase==2.33.0
 starlette==1.9.0
+pyarrow<25
+requests>=2.32,<3
+tzdata>=2025.1

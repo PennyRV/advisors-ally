@@ -1,0 +1,73 @@
+ADVISOR'S ALLY — VERSIÓN PARA ENTREGAR EL PROYECTO
+
+Este paquete reúne los módulos de Clientes, pólizas y documentos privados,
+consulta automática de PDF, preparación de WhatsApp y pantalla de Calendario.
+No incluye datos de clientes, claves, contraseñas ni tokens de Google.
+
+DESPLIEGUE STREAMLIT COMMUNITY CLOUD
+Repositorio: pennyrv/advisors-ally
+Rama: main
+Archivo principal: app.py
+Conserva la URL actual y actualiza su repositorio. No elimines la app para
+intentar reiniciarla. En la administración utiliza Reboot app si hace falta.
+La versión de Python se conserva en el alojamiento existente. El código se
+comprueba aquí con Python 3.12. No se cambia Python desde este paquete.
+
+ARCHIVOS
+Todos los .py, logo.svg y requirements.txt van en la raíz.
+.streamlit/config.toml contiene únicamente el tema visual, no claves.
+.gitignore reduce subidas accidentales desde Git; no protege subidas manuales.
+Conserva el LEEME para explicar el alcance al evaluador.
+Este paquete es para el alojamiento: no reemplaces tu instalación local que
+ya tiene Calendar/Meet autorizado, ni sus archivos privados.
+
+SECRETS EN STREAMLIT (Settings > Secrets)
+Usa los tres valores que ya tienes, sin publicarlos en el repositorio:
+GEMINI_API_KEY
+SUPABASE_URL
+SUPABASE_PUBLISHABLE_KEY
+Deben estar al nivel principal del TOML. No publiques service_role.
+No copies la sección [calendario] modo_local=true a la versión alojada.
+No subas secrets.toml, google_credentials.json, client_secret*.json ni los
+archivos de %LOCALAPPDATA%\AdvisorsAlly\calendarios.
+
+DATOS Y ACCESO PARA LA EVALUACIÓN
+Se usa el mismo Supabase, tablas y bucket privados ya configurados; no se
+necesitan nuevas migraciones. Cada usuario autenticado ve sus propios datos.
+Para evaluar con otra persona, prepara una cuenta de prueba y documentos
+ficticios. No publiques en el README ni en GitHub contraseñas de demostración.
+El evaluador necesitará iniciar sesión para probar Clientes/documentos.
+Los módulos Clasificar consultas y Mis pendientes siguen siendo marcadores
+pendientes; no se presentan como funciones terminadas.
+
+ALCANCE QUE DEBES EXPLICAR
+- Clientes: datos, varias pólizas por cliente, carga y descarga de adjuntos.
+- Consulta automática: preguntas sobre PDF con texto ya guardados; busca por
+  cliente/póliza y muestra fuentes. No interpreta imágenes/Word con IA.
+- Gemini: genera un borrador cuando se autoriza enviar pregunta/fragmentos;
+  para las pruebas utiliza información ficticia o sin datos confidenciales.
+- WhatsApp: simulación y borradores de cumpleaños/renovación. No envía ni
+  recibe mensajes; integración con Meta pendiente.
+- Google Calendar/Meet: funcional en la versión LOCAL probada por la autora.
+  La versión alojada muestra esa limitación; conectar distintos agentes por
+  web requiere OAuth web, que no se incluye en esta entrega.
+- No se incluye venta, cobro de suscripciones ni funciones comerciales nuevas.
+
+VERIFICACIÓN ANTES DE ENTREGAR LA URL
+1. Espera a que Streamlit finalice la instalación del último commit.
+2. Abre la URL en una ventana privada. Comprueba que termina de cargar y que
+   los campos y botones responden, no solo que el servidor figure iniciado.
+3. Entra con la cuenta de prueba y guarda un cliente ficticio con dos pólizas.
+4. Sube un PDF de prueba, consulta sin volver a subirlo y revisa las fuentes.
+5. Prueba WhatsApp como simulación; confirma que no se envían mensajes.
+6. Muestra Calendar/Meet desde local o una grabación si forma parte de la
+   evaluación; no afirmes que su conexión ya está disponible en línea.
+7. Si hay carga infinita, descarga/copia los últimos logs de Streamlit desde
+   Manage app antes de hacer más cambios. El ZIP por sí solo no demuestra
+   que el alojamiento funciona. La comprobación de la URL es obligatoria.
+
+DEPENDENCIAS
+Se conserva Streamlit 1.66.1 y las dependencias que funcionaron en local.
+Se añade pyarrow<25 para evitar reinstalar la versión 26 que los logs del
+alojamiento reemplazaban por una incidencia conocida. Esto no es una prueba
+ni una garantía de resolver un fallo de carga de archivos JavaScript.
